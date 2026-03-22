@@ -5,7 +5,6 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
-
 // ========== PIN DEFINITIONS ==========
 // RDM6300 on Hardware Serial2
 #define RDM6300_RX 16  // GPIO16 (RX2)
@@ -14,18 +13,18 @@
 // OLED — 1.3" SH1106 via I2C
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
-#define OLED_ADDR     0x3C
+#define OLED_RESET -1
+#define OLED_ADDR 0x3C
 // ESP32 default I2C: SDA=21, SCL=22 (no need to call Wire.begin with pins)
 
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // ========== WIFI CREDENTIALS ==========
-const char* ssid = "Huzaifa";
-const char* password = "Huzaifa@1234";
+const char* ssid = "...........";
+const char* password = "..........";
 
 // ========== API CONFIGURATION ==========
-const char* serverUrl = "https://goldenschoolbd.com/app/i/attendance/iot.php";
+const char* serverUrl = "https://";
 
 // ========== VARIABLES ==========
 String cardData = "";
@@ -75,7 +74,7 @@ String extractUID(String data) {
 void showWaitingScreen() {
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(20, 10);
+  display.setCursor(15, 10);
   display.println("Attendance System");
   display.drawLine(0, 25, 128, 25, SH110X_WHITE);
   display.setCursor(0, 35);
@@ -89,9 +88,9 @@ void showWaitingScreen() {
 void showError(String errorMsg, String uid) {
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println("Error!");
-  display.drawLine(0, 10, 128, 10, SH110X_WHITE);
+  display.setCursor(55, 0);
+  display.println("X");
+  display.drawLine(0, 13, 128, 13, SH110X_WHITE);
   display.setCursor(0, 20);
   display.print("UID: ");
   display.println(uid);
@@ -122,6 +121,7 @@ bool processJSONResponse(String jsonResponse, String uid) {
 
   if (doc.containsKey("value")) {
     const char* value = doc["value"];
+    const char* status = doc["status"];
 
     Serial.print("Value from server: ");
     Serial.println(value);
@@ -131,13 +131,36 @@ bool processJSONResponse(String jsonResponse, String uid) {
     Serial.println(uidDecimal);
 
     display.clearDisplay();
+    static const uint8_t check_bmp[] = {
+
+      0b00000000, 0b00000000,
+      0b00000000, 0b00000000,
+      0b00000000, 0b01000000,
+      0b00000000, 0b10000000,
+      0b00000001, 0b00000000,
+      0b00000010, 0b00000000,
+      0b01000100, 0b00000000,
+      0b00101000, 0b00000000,
+      0b00010000, 0b00000000,
+      0b00000000, 0b00000000
+    };
     display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println("Card Processed!");
-    display.drawLine(0, 10, 128, 10, SH110X_WHITE);
+    // display.setCursor(0, 0);
+    // display.println("Card Processed!");
+    if (String(status) == "success") {
+      display.drawBitmap(55, 0, check_bmp, 10, 10, SH110X_WHITE);
+      Serial.println("✓");
+    } else {
+      display.setCursor(55, 0);
+      display.print("X");
+      Serial.println("X");
+    }
+    display.drawLine(0, 15, 128, 15, SH110X_WHITE);
     display.setCursor(0, 20);
     display.print("UID: ");
-    display.println(uid);
+    display.print(uid);
+
+
     display.setCursor(0, 40);
 
     String valueStr = String(value);
@@ -191,16 +214,22 @@ void sendToAPI(String uid) {
   String payload = "{\"uid\":\"" + uid + "\",\"check\":\"Astagfirullah^^^\"}";
 
   Serial.println("\n========== API REQUEST ==========");
-  Serial.print("URL: ");      Serial.println(serverUrl);
-  Serial.print("UID (hex): "); Serial.println(uid);
-  Serial.print("UID (dec): "); Serial.println(strtoul(uid.c_str(), NULL, 16));
-  Serial.print("Payload: ");  Serial.println(payload);
+  Serial.print("URL: ");
+  Serial.println(serverUrl);
+  Serial.print("UID (hex): ");
+  Serial.println(uid);
+  Serial.print("UID (dec): ");
+  Serial.println(strtoul(uid.c_str(), NULL, 16));
+  Serial.print("Payload: ");
+  Serial.println(payload);
 
   int httpCode = http.POST(payload);
   String response = http.getString();
 
-  Serial.print("HTTP Code: "); Serial.println(httpCode);
-  Serial.println("Response:");  Serial.println(response);
+  Serial.print("HTTP Code: ");
+  Serial.println(httpCode);
+  Serial.println("Response:");
+  Serial.println(response);
   Serial.println("=================================\n");
 
   http.end();
@@ -294,8 +323,7 @@ void loop() {
         String uid = extractUID(cardData);
 
         if (uid != "") {
-          bool isDuplicate = (uid == lastProcessedUID &&
-                             (millis() - lastProcessedTime < duplicateCooldown));
+          bool isDuplicate = (uid == lastProcessedUID && (millis() - lastProcessedTime < duplicateCooldown));
 
           if (!isDuplicate) {
             Serial.print("Processing new card: ");
